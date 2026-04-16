@@ -38,12 +38,22 @@ public sealed class ProxyController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAsync([FromQuery] ProxyRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Key))
+        if (string.IsNullOrWhiteSpace(request.Endpoint))
         {
             return BadRequest(new ProblemDetails
             {
                 Title = "Invalid parameter",
-                Detail = "The query parameter 'key' is required.",
+                Detail = "The query parameter 'endpoint' is required.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Parametro))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid parameter",
+                Detail = "The query parameter 'parametro' is required.",
                 Status = StatusCodes.Status400BadRequest
             });
         }
@@ -51,7 +61,7 @@ public sealed class ProxyController : ControllerBase
         try
         {
             var response = await _externalProxyService
-                .GetOrRefreshAsync(request.Key, request.Update, cancellationToken)
+                .GetOrRefreshAsync(request.Endpoint, request.Parametro, request.Update, cancellationToken)
                 .ConfigureAwait(false);
 
             return Ok(response);

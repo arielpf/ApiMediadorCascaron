@@ -34,19 +34,25 @@ public sealed class ExternalProxyService : IExternalProxyService
     }
 
     /// <inheritdoc />
-    public async Task<JsonNode> GetOrRefreshAsync(string cacheKey, bool update, CancellationToken cancellationToken)
+    public async Task<JsonNode> GetOrRefreshAsync(string endpointKey, string cacheKey, bool update, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(endpointKey))
+        {
+            throw new ArgumentException("The endpoint key is required.", nameof(endpointKey));
+        }
+
         if (string.IsNullOrWhiteSpace(cacheKey))
         {
             throw new ArgumentException("The cache key is required.", nameof(cacheKey));
         }
 
         var ttlMinutes = _configuration.GetValue<int?>("Redis:DefaultTtlMinutes") ?? 30;
+        var redisCompositeKey = $"proxy:{endpointKey}:{cacheKey}";
 
         // Requisito: si update=false se debe intentar resolver desde Redis antes de consultar externo.
         if (!update)
         {
-            var cachedValue = await _redisDatabase.StringGetAsync(cacheKey).ConfigureAwait(false);
+            var cachedValue = await _redisDatabase.StringGetAsync(redisCompositeKey).ConfigureAwait(false);
             if (cachedValue.HasValue)
             {
                 ProxyMetrics.CacheHitCounter.Inc();
@@ -59,9 +65,12 @@ public sealed class ExternalProxyService : IExternalProxyService
 
         var baseUrl = _configuration["ExternalApi:BaseUrl"]
             ?? throw new InvalidOperationException("ExternalApi:BaseUrl is not configured.");
-        var queryParamName = _configuration["ExternalApi:CacheKeyQueryParam"] ?? "key";
+        var endpointPath = _configuration[$"ExternalApi:Endpoints:{endpointKey}"]
+            ?? throw new InvalidOperationException($"ExternalApi:Endpoints:{endpointKey} is not configured.");
+        var queryParamName = _configuration["ExternalApi:CacheKeyQueryParam"] ?? "parametro";
 
-        var requestUrl = QueryHelpers.AddQueryString(baseUrl, queryParamName, cacheKey);
+        var externalEndpointUrl = $"{baseUrl.TrimEnd('/')}/{endpointPath.TrimStart('/')}";
+        var requestUrl = QueryHelpers.AddQueryString(externalEndpointUrl, queryParamName, cacheKey);
 
         var stopwatch = Stopwatch.StartNew();
         using var response = await _httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
@@ -90,7 +99,7 @@ public sealed class ExternalProxyService : IExternalProxyService
 
         // Requisito: siempre persistir/sobrescribir en Redis cuando se consulta el origen externo.
         await _redisDatabase.StringSetAsync(
-            cacheKey,
+            redisCompositeKey,
             normalizedJson,
             TimeSpan.FromMinutes(ttlMinutes)).ConfigureAwait(false);
 
