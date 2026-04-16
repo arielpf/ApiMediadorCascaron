@@ -39,12 +39,20 @@ builder.Services.AddCors(options =>
 });
 
 // Registro de Redis como singleton para reutilizar la conexión.
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+{
+    var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+    // Permite que la app continúe operativa aunque Redis no esté disponible al arranque.
+    redisOptions.AbortOnConnectFail = false;
+    redisOptions.ConnectRetry = 3;
+    redisOptions.ConnectTimeout = builder.Configuration.GetValue<int?>("Redis:ConnectTimeoutMs") ?? 10000;
+    return ConnectionMultiplexer.Connect(redisOptions);
+});
 
 // Registro del servicio de aplicación con HttpClient tipado.
 builder.Services.AddHttpClient<IExternalProxyService, ExternalProxyService>((serviceProvider, httpClient) =>
 {
-    var timeoutSeconds = builder.Configuration.GetValue<int?>("ExternalApi:TimeoutSeconds") ?? 30;
+    var timeoutSeconds = builder.Configuration.GetValue<int?>("ExternalApi:TimeoutSeconds") ?? 120;
     httpClient.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
 });
 

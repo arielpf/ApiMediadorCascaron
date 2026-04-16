@@ -26,7 +26,7 @@ public sealed class ProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene registros independientes usando caché Redis y permite refresh forzado con <c>forzarUpdate</c>.
+    /// Obtiene registros independientes usando caché Redis y permite refresh forzado con <c>forceUpdate</c>.
     /// </summary>
     /// <param name="request">Parámetros de entrada del proxy.</param>
     /// <param name="cancellationToken">Token de cancelación de la petición HTTP.</param>
@@ -42,7 +42,7 @@ public sealed class ProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene información de persona usando caché Redis y permite refresh forzado con <c>forzarUpdate</c>.
+    /// Obtiene información de persona usando caché Redis y permite refresh forzado con <c>forceUpdate</c>.
     /// </summary>
     /// <param name="request">Parámetros de entrada del proxy.</param>
     /// <param name="cancellationToken">Token de cancelación de la petición HTTP.</param>
@@ -58,7 +58,7 @@ public sealed class ProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene información de persona con foto usando caché Redis y permite refresh forzado con <c>forzarUpdate</c>.
+    /// Obtiene información de persona con foto usando caché Redis y permite refresh forzado con <c>forceUpdate</c>.
     /// </summary>
     /// <param name="request">Parámetros de entrada del proxy.</param>
     /// <param name="cancellationToken">Token de cancelación de la petición HTTP.</param>
@@ -91,7 +91,7 @@ public sealed class ProxyController : ControllerBase
         try
         {
             var response = await _externalProxyService
-                .GetFromEndpointAsync(endpointKey, request.Parametro, request.ForzarUpdate, cancellationToken)
+                .GetFromEndpointAsync(endpointKey, request.Parametro, request.ForceUpdate, cancellationToken)
                 .ConfigureAwait(false);
 
             return Ok(response);

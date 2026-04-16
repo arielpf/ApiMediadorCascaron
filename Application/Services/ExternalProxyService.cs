@@ -16,6 +16,7 @@ public sealed class ExternalProxyService : IExternalProxyService
     private readonly HttpClient _httpClient;
     private readonly IDatabase _redisDatabase;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<ExternalProxyService> _logger;
 
     /// <summary>
     /// Inicializa una nueva instancia del servicio de proxy.
@@ -23,10 +24,12 @@ public sealed class ExternalProxyService : IExternalProxyService
     public ExternalProxyService(
         HttpClient httpClient,
         IConnectionMultiplexer connectionMultiplexer,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<ExternalProxyService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
+        _logger = logger;
 
         // Permite seleccionar la base de datos lógica de Redis vía appsettings.
         var databaseId = _configuration.GetValue<int?>("Redis:DatabaseId") ?? 0;
@@ -34,7 +37,7 @@ public sealed class ExternalProxyService : IExternalProxyService
     }
 
     /// <inheritdoc />
-    public async Task<JsonNode> GetFromEndpointAsync(string endpointKey, string parametro, bool forzarUpdate, CancellationToken cancellationToken)
+    public async Task<JsonNode> GetFromEndpointAsync(string endpointKey, string parametro, bool forceUpdate, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(endpointKey))
         {
@@ -49,24 +52,32 @@ public sealed class ExternalProxyService : IExternalProxyService
         var endpointSection = _configuration.GetSection($"ExternalApi:Endpoints:{endpointKey}");
         var externalEndpointUrl = endpointSection["Url"]
             ?? throw new InvalidOperationException($"ExternalApi:Endpoints:{endpointKey}:Url is not configured.");
-        var ttlMinutes = endpointSection.GetValue<int?>("TtlMinutes")
-            ?? _configuration.GetValue<int?>("Redis:DefaultTtlMinutes")
-            ?? 30;
+        var ttlDays = endpointSection.GetValue<double?>("TtlDays")
+            ?? _configuration.GetValue<double?>("Redis:DefaultTtlDays")
+            ?? 1;
 
         var redisCompositeKey = $"persona:{endpointKey}:{parametro}";
 
-        // Requisito: si forzarUpdate=false se debe intentar resolver desde Redis antes de consultar externo.
-        if (!forzarUpdate)
+        // Requisito: si forceUpdate=false se debe intentar resolver desde Redis antes de consultar externo.
+        if (!forceUpdate)
         {
-            var cachedValue = await _redisDatabase.StringGetAsync(redisCompositeKey).ConfigureAwait(false);
-            if (cachedValue.HasValue)
+            try
             {
-                ProxyMetrics.CacheHitCounter.Inc();
-                return JsonNode.Parse(cachedValue.ToString())
-                    ?? throw new JsonException("Cached value is not a valid JSON payload.");
-            }
+                var cachedValue = await _redisDatabase.StringGetAsync(redisCompositeKey).ConfigureAwait(false);
+                if (cachedValue.HasValue)
+                {
+                    ProxyMetrics.CacheHitCounter.Inc();
+                    return JsonNode.Parse(cachedValue.ToString())
+                        ?? throw new JsonException("Cached value is not a valid JSON payload.");
+                }
 
-            ProxyMetrics.CacheMissCounter.Inc();
+                ProxyMetrics.CacheMissCounter.Inc();
+            }
+            catch (RedisException redisException)
+            {
+                ProxyMetrics.RedisErrorCounter.Inc();
+                _logger.LogWarning(redisException, "Redis read failed for key {RedisKey}. Continuing with external source.", redisCompositeKey);
+            }
         }
 
         var queryParamName = _configuration["ExternalApi:CacheKeyQueryParam"] ?? "parametro";
@@ -98,10 +109,18 @@ public sealed class ExternalProxyService : IExternalProxyService
         });
 
         // Requisito: siempre persistir/sobrescribir en Redis cuando se consulta el origen externo.
-        await _redisDatabase.StringSetAsync(
-            redisCompositeKey,
-            normalizedJson,
-            TimeSpan.FromMinutes(ttlMinutes)).ConfigureAwait(false);
+        try
+        {
+            await _redisDatabase.StringSetAsync(
+                redisCompositeKey,
+                normalizedJson,
+                TimeSpan.FromDays(ttlDays)).ConfigureAwait(false);
+        }
+        catch (RedisException redisException)
+        {
+            ProxyMetrics.RedisErrorCounter.Inc();
+            _logger.LogWarning(redisException, "Redis write failed for key {RedisKey}. Returning external payload without cache update.", redisCompositeKey);
+        }
 
         return payloadNode;
     }

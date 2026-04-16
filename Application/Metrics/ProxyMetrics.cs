@@ -22,6 +22,13 @@ public static class ProxyMetrics
         "Total de cache misses que forzaron llamada externa.");
 
     /// <summary>
+    /// Contador de errores al interactuar con Redis (lectura/escritura/conectividad).
+    /// </summary>
+    public static readonly Counter RedisErrorCounter = Prometheus.Metrics.CreateCounter(
+        "proxy_redis_error_total",
+        "Total de errores de Redis durante operaciones de cache.");
+
+    /// <summary>
     /// Histograma de latencia de llamada al servicio externo en segundos.
     /// </summary>
     public static readonly Histogram ExternalLatencyHistogram = Prometheus.Metrics.CreateHistogram(

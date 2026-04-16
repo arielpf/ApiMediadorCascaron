@@ -12,8 +12,8 @@ public interface IExternalProxyService
     /// </summary>
     /// <param name="endpointKey">Identificador interno del endpoint configurado en appsettings.</param>
     /// <param name="parametro">Número de documento/parámetro requerido por el endpoint externo.</param>
-    /// <param name="forzarUpdate">Si es true, omite lectura de Redis y fuerza actualización desde origen externo.</param>
+    /// <param name="forceUpdate">Si es true, omite lectura de Redis y fuerza actualización desde origen externo.</param>
     /// <param name="cancellationToken">Token de cancelación de la operación asíncrona.</param>
     /// <returns>Respuesta JSON normalizada del origen externo o desde caché.</returns>
-    Task<JsonNode> GetFromEndpointAsync(string endpointKey, string parametro, bool forzarUpdate, CancellationToken cancellationToken);
+    Task<JsonNode> GetFromEndpointAsync(string endpointKey, string parametro, bool forceUpdate, CancellationToken cancellationToken);
 }
