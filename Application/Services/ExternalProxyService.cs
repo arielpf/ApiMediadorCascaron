@@ -2,6 +2,7 @@ using ApiMediadorCascaron.Application.Interfaces;
 using ApiMediadorCascaron.Application.Metrics;
 using Microsoft.AspNetCore.WebUtilities;
 using StackExchange.Redis;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -62,8 +63,10 @@ public sealed class ExternalProxyService : IExternalProxyService
 
         var requestUrl = QueryHelpers.AddQueryString(baseUrl, queryParamName, cacheKey);
 
-        using var latencyTimer = ProxyMetrics.ExternalLatencyHistogram.NewTimer();
+        var stopwatch = Stopwatch.StartNew();
         using var response = await _httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+        stopwatch.Stop();
+        ProxyMetrics.ExternalLatencyHistogram.Observe(stopwatch.Elapsed.TotalSeconds);
 
         response.EnsureSuccessStatusCode();
 
