@@ -7,8 +7,8 @@ using StackExchange.Redis;
 var builder = WebApplication.CreateBuilder(args);
 
 // Carga de configuración tipada para valores de infraestructura.
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
-    ?? throw new InvalidOperationException("Redis connection string is not configured.");
+var redisConnectionString = builder.Configuration["Redis:ConnectionString"]
+    ?? throw new InvalidOperationException("Redis:ConnectionString is not configured.");
 
 // Servicios base para API y serialización JSON.
 builder.Services.AddControllers();

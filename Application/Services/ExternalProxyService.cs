@@ -25,8 +25,11 @@ public sealed class ExternalProxyService : IExternalProxyService
         IConfiguration configuration)
     {
         _httpClient = httpClient;
-        _redisDatabase = connectionMultiplexer.GetDatabase();
         _configuration = configuration;
+
+        // Permite seleccionar la base de datos lógica de Redis vía appsettings.
+        var databaseId = _configuration.GetValue<int?>("Redis:DatabaseId") ?? 0;
+        _redisDatabase = connectionMultiplexer.GetDatabase(databaseId);
     }
 
     /// <inheritdoc />
