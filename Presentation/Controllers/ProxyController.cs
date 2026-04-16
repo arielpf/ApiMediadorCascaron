@@ -26,28 +26,58 @@ public sealed class ProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene una respuesta cacheada o forzada desde API externa según el parámetro <c>update</c>.
+    /// Obtiene registros independientes usando caché Redis y permite refresh forzado con <c>forzarUpdate</c>.
     /// </summary>
     /// <param name="request">Parámetros de entrada del proxy.</param>
     /// <param name="cancellationToken">Token de cancelación de la petición HTTP.</param>
     /// <returns>Payload JSON del recurso mediado.</returns>
-    [HttpGet]
+    [HttpGet("registros-independientes")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetAsync([FromQuery] ProxyRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetRegistrosIndependientesAsync([FromQuery] ProxyRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Endpoint))
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Invalid parameter",
-                Detail = "The query parameter 'endpoint' is required.",
-                Status = StatusCodes.Status400BadRequest
-            });
-        }
+        return await ExecuteProxyAsync("obtener-RegistrosIndependientes", request, cancellationToken).ConfigureAwait(false);
+    }
 
+    /// <summary>
+    /// Obtiene información de persona usando caché Redis y permite refresh forzado con <c>forzarUpdate</c>.
+    /// </summary>
+    /// <param name="request">Parámetros de entrada del proxy.</param>
+    /// <param name="cancellationToken">Token de cancelación de la petición HTTP.</param>
+    /// <returns>Payload JSON del recurso mediado.</returns>
+    [HttpGet("obtener-persona")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetPersonaAsync([FromQuery] ProxyRequest request, CancellationToken cancellationToken)
+    {
+        return await ExecuteProxyAsync("obtener-persona", request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Obtiene información de persona con foto usando caché Redis y permite refresh forzado con <c>forzarUpdate</c>.
+    /// </summary>
+    /// <param name="request">Parámetros de entrada del proxy.</param>
+    /// <param name="cancellationToken">Token de cancelación de la petición HTTP.</param>
+    /// <returns>Payload JSON del recurso mediado.</returns>
+    [HttpGet("obtener-persona-con-foto")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetPersonaConFotoAsync([FromQuery] ProxyRequest request, CancellationToken cancellationToken)
+    {
+        return await ExecuteProxyAsync("obtener-persona-con-foto", request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Ejecuta el flujo estándar de proxy para el endpoint solicitado.
+    /// </summary>
+    private async Task<IActionResult> ExecuteProxyAsync(string endpointKey, ProxyRequest request, CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(request.Parametro))
         {
             return BadRequest(new ProblemDetails
@@ -61,7 +91,7 @@ public sealed class ProxyController : ControllerBase
         try
         {
             var response = await _externalProxyService
-                .GetOrRefreshAsync(request.Endpoint, request.Parametro, request.Update, cancellationToken)
+                .GetFromEndpointAsync(endpointKey, request.Parametro, request.ForzarUpdate, cancellationToken)
                 .ConfigureAwait(false);
 
             return Ok(response);

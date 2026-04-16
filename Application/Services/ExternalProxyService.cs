@@ -34,23 +34,29 @@ public sealed class ExternalProxyService : IExternalProxyService
     }
 
     /// <inheritdoc />
-    public async Task<JsonNode> GetOrRefreshAsync(string endpointKey, string cacheKey, bool update, CancellationToken cancellationToken)
+    public async Task<JsonNode> GetFromEndpointAsync(string endpointKey, string parametro, bool forzarUpdate, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(endpointKey))
         {
             throw new ArgumentException("The endpoint key is required.", nameof(endpointKey));
         }
 
-        if (string.IsNullOrWhiteSpace(cacheKey))
+        if (string.IsNullOrWhiteSpace(parametro))
         {
-            throw new ArgumentException("The cache key is required.", nameof(cacheKey));
+            throw new ArgumentException("The parametro value is required.", nameof(parametro));
         }
 
-        var ttlMinutes = _configuration.GetValue<int?>("Redis:DefaultTtlMinutes") ?? 30;
-        var redisCompositeKey = $"proxy:{endpointKey}:{cacheKey}";
+        var endpointSection = _configuration.GetSection($"ExternalApi:Endpoints:{endpointKey}");
+        var externalEndpointUrl = endpointSection["Url"]
+            ?? throw new InvalidOperationException($"ExternalApi:Endpoints:{endpointKey}:Url is not configured.");
+        var ttlMinutes = endpointSection.GetValue<int?>("TtlMinutes")
+            ?? _configuration.GetValue<int?>("Redis:DefaultTtlMinutes")
+            ?? 30;
 
-        // Requisito: si update=false se debe intentar resolver desde Redis antes de consultar externo.
-        if (!update)
+        var redisCompositeKey = $"persona:{endpointKey}:{parametro}";
+
+        // Requisito: si forzarUpdate=false se debe intentar resolver desde Redis antes de consultar externo.
+        if (!forzarUpdate)
         {
             var cachedValue = await _redisDatabase.StringGetAsync(redisCompositeKey).ConfigureAwait(false);
             if (cachedValue.HasValue)
@@ -63,14 +69,8 @@ public sealed class ExternalProxyService : IExternalProxyService
             ProxyMetrics.CacheMissCounter.Inc();
         }
 
-        var baseUrl = _configuration["ExternalApi:BaseUrl"]
-            ?? throw new InvalidOperationException("ExternalApi:BaseUrl is not configured.");
-        var endpointPath = _configuration[$"ExternalApi:Endpoints:{endpointKey}"]
-            ?? throw new InvalidOperationException($"ExternalApi:Endpoints:{endpointKey} is not configured.");
         var queryParamName = _configuration["ExternalApi:CacheKeyQueryParam"] ?? "parametro";
-
-        var externalEndpointUrl = $"{baseUrl.TrimEnd('/')}/{endpointPath.TrimStart('/')}";
-        var requestUrl = QueryHelpers.AddQueryString(externalEndpointUrl, queryParamName, cacheKey);
+        var requestUrl = QueryHelpers.AddQueryString(externalEndpointUrl, queryParamName, parametro);
 
         var stopwatch = Stopwatch.StartNew();
         using var response = await _httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
